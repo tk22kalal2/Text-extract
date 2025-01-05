@@ -1,7 +1,10 @@
+let extractedText = '';
+
 document.getElementById('extractText').addEventListener('click', async function () {
   const pdfUpload = document.getElementById('pdfUpload');
   const output = document.getElementById('textResult');
   const loader = document.getElementById('loader');
+  const generateMCQsButton = document.getElementById('generateMCQs');
 
   // Step 1: Check if a PDF is uploaded
   if (pdfUpload.files.length === 0) {
@@ -13,6 +16,7 @@ document.getElementById('extractText').addEventListener('click', async function 
   alert('Step 1: PDF uploaded successfully.');
   loader.style.display = 'block';
   output.textContent = '';
+  generateMCQsButton.style.display = 'none';
 
   const file = pdfUpload.files[0];
   const fileReader = new FileReader();
@@ -26,7 +30,7 @@ document.getElementById('extractText').addEventListener('click', async function 
       alert(`Step 2: PDF loaded successfully. Total pages: ${pdf.numPages}`);
       console.log('PDF loaded:', pdf);
 
-      let extractedText = '';
+      extractedText = '';
 
       // Step 3: Loop through each page and extract text
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
@@ -63,8 +67,8 @@ document.getElementById('extractText').addEventListener('click', async function 
       output.textContent = extractedText || 'No text detected in the PDF!';
       alert('Step 5: Text extraction completed successfully.');
 
-      // Step 6: Save and send the extracted text to GROQ AI API
-      generateMCQsFromText(extractedText);
+      // Show "Generate MCQs" button after extraction
+      generateMCQsButton.style.display = 'block';
 
     } catch (error) {
       loader.style.display = 'none';
@@ -84,9 +88,19 @@ document.getElementById('extractText').addEventListener('click', async function 
 });
 
 // Function to generate MCQs using the GROQ AI API
-async function generateMCQsFromText(extractedText) {
+document.getElementById('generateMCQs').addEventListener('click', async function () {
   const GROQ_API_KEY = "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";
   const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+  const mcqContainer = document.getElementById('mcqContainer');
+  const mcqResult = document.getElementById('mcqResult');
+
+  if (!extractedText) {
+    alert('No extracted text available! Please extract text first.');
+    return;
+  }
+
+  mcqContainer.style.display = 'none'; // Hide the container initially
+  mcqResult.textContent = 'Generating MCQs...';
 
   try {
     const response = await fetch(GROQ_API_URL, {
@@ -96,7 +110,8 @@ async function generateMCQsFromText(extractedText) {
         "Authorization": `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-specdec",
+        model: "llama-3.3-70b-specdec", // Updated model
+        stream: false,
         messages: [
           {
             role: "system",
@@ -108,8 +123,7 @@ async function generateMCQsFromText(extractedText) {
           }
         ],
         max_tokens: 1000,
-        temperature: 0.7,
-        stream: false
+        temperature: 0.7
       })
     });
 
@@ -120,15 +134,15 @@ async function generateMCQsFromText(extractedText) {
     const result = await response.json();
     const mcqs = result.choices[0].message.content;
 
-    // Display the MCQs in the output section
-    const output = document.getElementById('textResult');
-    output.textContent = `Extracted Text:\n\n${extractedText}\n\nGenerated MCQs:\n\n${mcqs}`;
+    // Display the MCQs in the container
+    mcqContainer.style.display = 'block';
+    mcqResult.textContent = mcqs;
     alert('MCQs generated successfully!');
 
     console.log('Generated MCQs:', mcqs);
 
   } catch (error) {
-    alert('Error generating MCQs!');
+    mcqResult.textContent = 'Error generating MCQs!';
     console.error('GROQ AI API error:', error);
   }
-}
+});
