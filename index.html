@@ -9,30 +9,20 @@
 <body>
   <div class="container">
     <h1>PDF to MCQ Generator</h1>
-    <p>Upload a PDF, extract text, and generate questions.</p>
-    
-    <!-- PDF Upload Section -->
+    <p>Upload a PDF to extract text and generate MCQs.</p>
     <input type="file" id="pdfUpload" accept="application/pdf">
     <button id="extractText">Extract Text</button>
     <div id="loader" style="display: none;">Processing...</div>
-    
-    <!-- OCR Extracted Text Section -->
     <div id="output">
       <h2>Extracted Text:</h2>
       <p id="textResult"></p>
     </div>
-
-    <!-- Question Generation Section -->
     <div id="questionSection">
-      <button id="generateQuestion" disabled>Generate Question</button>
       <h2>Generated Question:</h2>
       <p id="questionContainer"></p>
-      <div id="optionsContainer"></div>
-      <button id="nextQuestion" disabled>Next Question</button>
+      <button id="nextQuestion">Next Question</button>
     </div>
   </div>
-
-  <!-- Dependencies -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/tesseract.min.js"></script>
   <script src="script.js"></script>
