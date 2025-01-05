@@ -1,12 +1,11 @@
 const GROQ_API_KEY = "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";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-let ocrText = ""; // Full OCR text extracted from the PDF
-let textChunks = []; // Chunks of the OCR text
-let currentChunkIndex = 0; // Current chunk being processed
-let currentQuestion = ""; // Current question displayed
+let ocrText = ""; // OCR text extracted from the PDF
+let currentQuestion = ""; // Current question
+let currentChunkIndex = 0; // Keeps track of text chunks processed
 
-// Function to chunk the OCR text
+// Function to chunk OCR text (optional for large text)
 function chunkText(text, chunkSize = 1000) {
   const chunks = [];
   for (let i = 0; i < text.length; i += chunkSize) {
@@ -16,7 +15,7 @@ function chunkText(text, chunkSize = 1000) {
 }
 
 // Function to call GROQ API and generate a question
-async function generateQuestion(chunk) {
+async function generateQuestionFromOCR(textChunk) {
   const payload = {
     model: "gpt-4",
     messages: [
@@ -26,7 +25,7 @@ async function generateQuestion(chunk) {
       },
       {
         role: "user",
-        content: `Generate one multiple-choice question (MCQ) with 4 options from this content:\n\n${chunk}\n\nEnsure one option is correct and clearly mark it. Format it as:\nQ: <Question>\nA. <Option 1>\nB. <Option 2>\nC. <Option 3>\nD. <Option 4>\nAnswer: <Correct Option>`,
+        content: `Create one MCQ with 4 options from the following content:\n\n${textChunk}\n\nFormat it as:\nQ: <Question>\nA. <Option 1>\nB. <Option 2>\nC. <Option 3>\nD. <Option 4>\nAnswer: <Correct Option>`,
       },
     ],
     temperature: 0.7,
@@ -55,41 +54,68 @@ async function generateQuestion(chunk) {
   }
 }
 
-// Function to display the current question
-function displayQuestion(question) {
+// Display generated question and options
+function displayQuestion(questionText) {
   const questionContainer = document.getElementById("questionContainer");
+  const optionsContainer = document.getElementById("optionsContainer");
+
+  // Parse the question and options from the response
+  const lines = questionText.split("\n");
+  const question = lines.find(line => line.startsWith("Q:"));
+  const options = lines.filter(line => /^[A-D]\./.test(line));
+
+  // Display question
   questionContainer.textContent = question || "No question available.";
+
+  // Display options
+  optionsContainer.innerHTML = "";
+  options.forEach(option => {
+    const optionButton = document.createElement("button");
+    optionButton.textContent = option;
+    optionButton.className = "option-button";
+    optionsContainer.appendChild(optionButton);
+  });
 }
 
-// Function to handle "Next Question" button
-async function handleNextQuestion() {
-  if (currentChunkIndex < textChunks.length) {
-    const chunk = textChunks[currentChunkIndex];
-    currentQuestion = await generateQuestion(chunk);
-    displayQuestion(currentQuestion);
-    currentChunkIndex++;
-  } else {
-    displayQuestion("No more questions available!");
-  }
-}
-
-// Extract OCR Text and prepare chunks
+// Event Listener: Extract OCR Text
 document.getElementById("extractText").addEventListener("click", async function () {
-  // Assuming OCR process is already complete and stored in `ocrText`
-  ocrText = document.getElementById("textResult").textContent;
+  const fileInput = document.getElementById("pdfUpload");
+  const textResult = document.getElementById("textResult");
+  const generateQuestionButton = document.getElementById("generateQuestion");
 
-  if (!ocrText.trim()) {
-    alert("No text available to process. Perform OCR first.");
+  if (!fileInput.files.length) {
+    alert("Please upload a PDF file.");
     return;
   }
 
-  alert("Chunking text for question generation...");
-  textChunks = chunkText(ocrText);
-  currentChunkIndex = 0;
+  const file = fileInput.files[0];
+  const pdfText = await extractTextFromPDF(file); // Function to extract text from PDF (assume already implemented)
+  const ocrResult = await performOCR(pdfText); // Perform OCR on the PDF (assume already implemented)
 
-  alert(`Text chunked into ${textChunks.length} parts. Ready to generate questions.`);
-  handleNextQuestion(); // Generate the first question
+  ocrText = ocrResult.trim();
+
+  if (ocrText) {
+    textResult.textContent = ocrText;
+    generateQuestionButton.disabled = false; // Enable "Generate Question" button
+  } else {
+    alert("No text extracted from the PDF.");
+  }
 });
 
-// Handle "Next Question" button click
-document.getElementById("nextQuestion").addEventListener("click", handleNextQuestion);
+// Event Listener: Generate Question
+document.getElementById("generateQuestion").addEventListener("click", async function () {
+  const textChunks = chunkText(ocrText);
+  if (currentChunkIndex < textChunks.length) {
+    const currentChunk = textChunks[currentChunkIndex];
+    const question = await generateQuestionFromOCR(currentChunk);
+    displayQuestion(question);
+    currentChunkIndex++;
+  } else {
+    alert("All questions have been generated.");
+  }
+});
+
+// Event Listener: Next Question
+document.getElementById("nextQuestion").addEventListener("click", function () {
+  document.getElementById("generateQuestion").click(); // Simulate "Generate Question" button click
+});
