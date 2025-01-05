@@ -1,80 +1,77 @@
 const GROQ_API_KEY = "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";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-let ocrText = ""; // OCR text extracted from the PDF
-let currentQuestion = ""; // Current question
-let currentChunkIndex = 0; // Keeps track of text chunks processed
+let ocrText = ""; // Aggregated OCR text
 
-// Function to chunk OCR text (optional for large text)
-function chunkText(text, chunkSize = 1000) {
-  const chunks = [];
-  for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push(text.slice(i, i + chunkSize));
-  }
-  return chunks;
-}
+// Extract Text from PDF by converting pages to images
+async function extractTextFromPDF(file) {
+  const pdfjsLib = window["pdfjs-dist/build/pdf"];
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.worker.min.js";
 
-// Function to call GROQ API and generate a question
-async function generateQuestionFromOCR(textChunk) {
-  const payload = {
-    model: "gpt-4",
-    messages: [
-      {
-        role: "system",
-        content: "You are a professional educator creating multiple-choice questions (MCQs).",
-      },
-      {
-        role: "user",
-        content: `Create one MCQ with 4 options from the following content:\n\n${textChunk}\n\nFormat it as:\nQ: <Question>\nA. <Option 1>\nB. <Option 2>\nC. <Option 3>\nD. <Option 4>\nAnswer: <Correct Option>`,
-      },
-    ],
-    temperature: 0.7,
-    max_tokens: 300,
-  };
+  const fileReader = new FileReader();
+  return new Promise((resolve, reject) => {
+    fileReader.onload = async function () {
+      const typedArray = new Uint8Array(this.result);
+      const pdf = await pdfjsLib.getDocument(typedArray).promise;
 
-  try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
+      console.log(`PDF loaded: ${pdf.numPages} pages found.`);
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
+      const textArray = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        console.log(`Processing page ${i}...`);
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
 
-    const data = await response.json();
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error("Error generating question:", error);
-    return "Error: Unable to generate question.";
-  }
-}
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
 
-// Display generated question and options
-function displayQuestion(questionText) {
-  const questionContainer = document.getElementById("questionContainer");
-  const optionsContainer = document.getElementById("optionsContainer");
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+        await page.render(renderContext).promise;
 
-  // Parse the question and options from the response
-  const lines = questionText.split("\n");
-  const question = lines.find(line => line.startsWith("Q:"));
-  const options = lines.filter(line => /^[A-D]\./.test(line));
+        // Perform OCR on the canvas image
+        const imageData = canvas.toDataURL("image/png");
+        const ocrResult = await performOCR(imageData);
 
-  // Display question
-  questionContainer.textContent = question || "No question available.";
+        if (ocrResult) {
+          console.log(`Text extracted from page ${i}:`, ocrResult);
+          textArray.push(ocrResult);
+        } else {
+          console.warn(`No text found on page ${i}.`);
+        }
+      }
 
-  // Display options
-  optionsContainer.innerHTML = "";
-  options.forEach(option => {
-    const optionButton = document.createElement("button");
-    optionButton.textContent = option;
-    optionButton.className = "option-button";
-    optionsContainer.appendChild(optionButton);
+      // Combine text from all pages
+      const fullText = textArray.join("\n");
+      resolve(fullText);
+    };
+
+    fileReader.onerror = function () {
+      reject(new Error("Failed to read the PDF file."));
+    };
+
+    fileReader.readAsArrayBuffer(file);
   });
+}
+
+// Perform OCR on an Image (using Tesseract.js)
+async function performOCR(imageData) {
+  try {
+    console.log("Performing OCR on the image...");
+    const result = await Tesseract.recognize(imageData, "eng", {
+      logger: (info) => console.log(info),
+    });
+    console.log("OCR Result:", result.data.text);
+    return result.data.text.trim();
+  } catch (error) {
+    console.error("OCR error:", error);
+    return null;
+  }
 }
 
 // Event Listener: Extract OCR Text
@@ -82,6 +79,7 @@ document.getElementById("extractText").addEventListener("click", async function 
   const fileInput = document.getElementById("pdfUpload");
   const textResult = document.getElementById("textResult");
   const generateQuestionButton = document.getElementById("generateQuestion");
+  const loader = document.getElementById("loader");
 
   if (!fileInput.files.length) {
     alert("Please upload a PDF file.");
@@ -89,33 +87,24 @@ document.getElementById("extractText").addEventListener("click", async function 
   }
 
   const file = fileInput.files[0];
-  const pdfText = await extractTextFromPDF(file); // Function to extract text from PDF (assume already implemented)
-  const ocrResult = await performOCR(pdfText); // Perform OCR on the PDF (assume already implemented)
+  textResult.textContent = ""; // Clear previous text
+  loader.style.display = "block"; // Show loader
 
-  ocrText = ocrResult.trim();
+  try {
+    ocrText = await extractTextFromPDF(file);
+    loader.style.display = "none"; // Hide loader
 
-  if (ocrText) {
-    textResult.textContent = ocrText;
-    generateQuestionButton.disabled = false; // Enable "Generate Question" button
-  } else {
-    alert("No text extracted from the PDF.");
+    if (ocrText) {
+      console.log("Final Extracted OCR Text:", ocrText);
+      textResult.textContent = ocrText;
+      generateQuestionButton.disabled = false; // Enable "Generate Question" button
+    } else {
+      alert("No text extracted from the PDF.");
+      textResult.textContent = "No text available to process.";
+    }
+  } catch (error) {
+    console.error("Error extracting text from PDF:", error);
+    alert("Failed to process the PDF. Please try again.");
+    loader.style.display = "none"; // Hide loader
   }
-});
-
-// Event Listener: Generate Question
-document.getElementById("generateQuestion").addEventListener("click", async function () {
-  const textChunks = chunkText(ocrText);
-  if (currentChunkIndex < textChunks.length) {
-    const currentChunk = textChunks[currentChunkIndex];
-    const question = await generateQuestionFromOCR(currentChunk);
-    displayQuestion(question);
-    currentChunkIndex++;
-  } else {
-    alert("All questions have been generated.");
-  }
-});
-
-// Event Listener: Next Question
-document.getElementById("nextQuestion").addEventListener("click", function () {
-  document.getElementById("generateQuestion").click(); // Simulate "Generate Question" button click
 });
