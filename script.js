@@ -1,80 +1,95 @@
-document.getElementById('extractText').addEventListener('click', async function () {
-  const pdfUpload = document.getElementById('pdfUpload');
-  const output = document.getElementById('textResult');
-  const loader = document.getElementById('loader');
+const GROQ_API_KEY = "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";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-  // Step 1: Check if a PDF is uploaded
-  if (pdfUpload.files.length === 0) {
-    alert('Please upload a PDF first!');
-    console.error('Error: No file uploaded.');
+let ocrText = ""; // Full OCR text extracted from the PDF
+let textChunks = []; // Chunks of the OCR text
+let currentChunkIndex = 0; // Current chunk being processed
+let currentQuestion = ""; // Current question displayed
+
+// Function to chunk the OCR text
+function chunkText(text, chunkSize = 1000) {
+  const chunks = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+// Function to call GROQ API and generate a question
+async function generateQuestion(chunk) {
+  const payload = {
+    model: "gpt-4",
+    messages: [
+      {
+        role: "system",
+        content: "You are a professional educator creating multiple-choice questions (MCQs).",
+      },
+      {
+        role: "user",
+        content: `Generate one multiple-choice question (MCQ) with 4 options from this content:\n\n${chunk}\n\nEnsure one option is correct and clearly mark it. Format it as:\nQ: <Question>\nA. <Option 1>\nB. <Option 2>\nC. <Option 3>\nD. <Option 4>\nAnswer: <Correct Option>`,
+      },
+    ],
+    temperature: 0.7,
+    max_tokens: 300,
+  };
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error("Error generating question:", error);
+    return "Error: Unable to generate question.";
+  }
+}
+
+// Function to display the current question
+function displayQuestion(question) {
+  const questionContainer = document.getElementById("questionContainer");
+  questionContainer.textContent = question || "No question available.";
+}
+
+// Function to handle "Next Question" button
+async function handleNextQuestion() {
+  if (currentChunkIndex < textChunks.length) {
+    const chunk = textChunks[currentChunkIndex];
+    currentQuestion = await generateQuestion(chunk);
+    displayQuestion(currentQuestion);
+    currentChunkIndex++;
+  } else {
+    displayQuestion("No more questions available!");
+  }
+}
+
+// Extract OCR Text and prepare chunks
+document.getElementById("extractText").addEventListener("click", async function () {
+  // Assuming OCR process is already complete and stored in `ocrText`
+  ocrText = document.getElementById("textResult").textContent;
+
+  if (!ocrText.trim()) {
+    alert("No text available to process. Perform OCR first.");
     return;
   }
 
-  alert('Step 1: PDF uploaded successfully.');
-  loader.style.display = 'block';
-  output.textContent = '';
+  alert("Chunking text for question generation...");
+  textChunks = chunkText(ocrText);
+  currentChunkIndex = 0;
 
-  const file = pdfUpload.files[0];
-  const fileReader = new FileReader();
-
-  fileReader.onload = async function (event) {
-    const typedArray = new Uint8Array(event.target.result);
-
-    try {
-      // Step 2: Load PDF using pdf.js
-      const pdf = await pdfjsLib.getDocument(typedArray).promise;
-      alert(`Step 2: PDF loaded successfully. Total pages: ${pdf.numPages}`);
-      console.log('PDF loaded:', pdf);
-
-      let extractedText = '';
-
-      // Step 3: Loop through each page and convert it to an image
-      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-        const page = await pdf.getPage(pageNumber);
-        alert(`Processing page ${pageNumber}/${pdf.numPages}`);
-        console.log(`Processing page ${pageNumber}`);
-
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
-        };
-
-        await page.render(renderContext).promise;
-
-        // Step 4: Convert the canvas to an image and pass it to Tesseract
-        const imageDataURL = canvas.toDataURL();
-        const { data: { text } } = await Tesseract.recognize(imageDataURL, 'eng', {
-          logger: (info) => console.log('Tesseract progress:', info),
-        });
-
-        extractedText += `Page ${pageNumber}:\n${text}\n\n`;
-        console.log(`Extracted text from page ${pageNumber}:`, text);
-      }
-
-      // Step 5: Display the extracted text
-      loader.style.display = 'none';
-      output.textContent = extractedText || 'No text detected in the PDF!';
-      alert('Step 5: Text extraction completed successfully.');
-    } catch (error) {
-      loader.style.display = 'none';
-      alert('Error processing the PDF!');
-      console.error('Error:', error);
-      output.textContent = 'Error processing the PDF!';
-    }
-  };
-
-  fileReader.onerror = function () {
-    alert('Error reading the PDF file!');
-    console.error('FileReader error:', fileReader.error);
-    loader.style.display = 'none';
-  };
-
-  fileReader.readAsArrayBuffer(file);
+  alert(`Text chunked into ${textChunks.length} parts. Ready to generate questions.`);
+  handleNextQuestion(); // Generate the first question
 });
+
+// Handle "Next Question" button click
+document.getElementById("nextQuestion").addEventListener("click", handleNextQuestion);
