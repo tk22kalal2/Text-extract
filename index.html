@@ -3,19 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF to Text Extractor</title>
+  <title>PDF to Text & MCQ Generator</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <h1>PDF to Text Extractor</h1>
-    <p>Upload a PDF (image-based or text-based) to extract text from it.</p>
+    <h1>PDF to Text & MCQ Generator</h1>
+    <p>Upload a PDF (image-based or text-based) to extract text and generate MCQs.</p>
     <input type="file" id="pdfUpload" accept="application/pdf">
     <button id="extractText">Extract Text</button>
     <div id="loader" style="display: none;">Processing...</div>
     <div id="output">
       <h2>Extracted Text:</h2>
       <p id="textResult"></p>
+    </div>
+    <button id="generateMCQs" style="display: none;">Generate MCQs</button>
+    <div id="mcqContainer" style="display: none;">
+      <h2>Generated MCQs:</h2>
+      <p id="mcqResult"></p>
     </div>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
