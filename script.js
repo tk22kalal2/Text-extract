@@ -28,7 +28,7 @@ document.getElementById('extractText').addEventListener('click', async function 
 
       let extractedText = '';
 
-      // Step 3: Loop through each page and convert it to an image
+      // Step 3: Loop through each page and extract text
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
         const page = await pdf.getPage(pageNumber);
         alert(`Processing page ${pageNumber}/${pdf.numPages}`);
@@ -62,6 +62,10 @@ document.getElementById('extractText').addEventListener('click', async function 
       loader.style.display = 'none';
       output.textContent = extractedText || 'No text detected in the PDF!';
       alert('Step 5: Text extraction completed successfully.');
+
+      // Step 6: Save and send the extracted text to GROQ AI API
+      generateMCQsFromText(extractedText);
+
     } catch (error) {
       loader.style.display = 'none';
       alert('Error processing the PDF!');
@@ -78,3 +82,52 @@ document.getElementById('extractText').addEventListener('click', async function 
 
   fileReader.readAsArrayBuffer(file);
 });
+
+// Function to generate MCQs using the GROQ AI API
+async function generateMCQsFromText(extractedText) {
+  const GROQ_API_KEY = "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";
+  const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4", // Replace with the required model name
+        messages: [
+          {
+            role: "system",
+            content: "You are an AI that generates multiple-choice questions (MCQs) based on the given text."
+          },
+          {
+            role: "user",
+            content: `Generate multiple-choice questions based on the following text:\n\n${extractedText}`
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const mcqs = result.choices[0].message.content;
+
+    // Display the MCQs in the output section
+    const output = document.getElementById('textResult');
+    output.textContent = `Extracted Text:\n\n${extractedText}\n\nGenerated MCQs:\n\n${mcqs}`;
+    alert('MCQs generated successfully!');
+
+    console.log('Generated MCQs:', mcqs);
+
+  } catch (error) {
+    alert('Error generating MCQs!');
+    console.error('GROQ AI API error:', error);
+  }
+}
