@@ -96,7 +96,7 @@ async function generateMCQsFromText(extractedText) {
         "Authorization": `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4", // Replace with the required model name
+        model: "llama-3.3-70b-specdec",
         messages: [
           {
             role: "system",
@@ -108,7 +108,8 @@ async function generateMCQsFromText(extractedText) {
           }
         ],
         max_tokens: 1000,
-        temperature: 0.7
+        temperature: 0.7,
+        stream: false
       })
     });
 
