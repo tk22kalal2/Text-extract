@@ -1,4 +1,6 @@
 let extractedText = '';
+let questionIndex = 0;
+let allQuestions = [];
 
 document.getElementById('extractText').addEventListener('click', async function () {
   const pdfUpload = document.getElementById('pdfUpload');
@@ -6,14 +8,11 @@ document.getElementById('extractText').addEventListener('click', async function 
   const loader = document.getElementById('loader');
   const generateMCQsButton = document.getElementById('generateMCQs');
 
-  // Step 1: Check if a PDF is uploaded
   if (pdfUpload.files.length === 0) {
     alert('Please upload a PDF first!');
-    console.error('Error: No file uploaded.');
     return;
   }
 
-  alert('Step 1: PDF uploaded successfully.');
   loader.style.display = 'block';
   output.textContent = '';
   generateMCQsButton.style.display = 'none';
@@ -25,19 +24,11 @@ document.getElementById('extractText').addEventListener('click', async function 
     const typedArray = new Uint8Array(event.target.result);
 
     try {
-      // Step 2: Load PDF using pdf.js
       const pdf = await pdfjsLib.getDocument(typedArray).promise;
-      alert(`Step 2: PDF loaded successfully. Total pages: ${pdf.numPages}`);
-      console.log('PDF loaded:', pdf);
-
       extractedText = '';
 
-      // Step 3: Loop through each page and extract text
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
         const page = await pdf.getPage(pageNumber);
-        alert(`Processing page ${pageNumber}/${pdf.numPages}`);
-        console.log(`Processing page ${pageNumber}`);
-
         const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
@@ -52,55 +43,39 @@ document.getElementById('extractText').addEventListener('click', async function 
 
         await page.render(renderContext).promise;
 
-        // Step 4: Convert the canvas to an image and pass it to Tesseract
         const imageDataURL = canvas.toDataURL();
-        const { data: { text } } = await Tesseract.recognize(imageDataURL, 'eng', {
-          logger: (info) => console.log('Tesseract progress:', info),
-        });
-
+        const { data: { text } } = await Tesseract.recognize(imageDataURL, 'eng');
         extractedText += `Page ${pageNumber}:\n${text}\n\n`;
-        console.log(`Extracted text from page ${pageNumber}:`, text);
       }
 
-      // Step 5: Display the extracted text
       loader.style.display = 'none';
       output.textContent = extractedText || 'No text detected in the PDF!';
-      alert('Step 5: Text extraction completed successfully.');
-
-      // Show "Generate MCQs" button after extraction
       generateMCQsButton.style.display = 'block';
 
     } catch (error) {
       loader.style.display = 'none';
-      alert('Error processing the PDF!');
       console.error('Error:', error);
       output.textContent = 'Error processing the PDF!';
     }
   };
 
-  fileReader.onerror = function () {
-    alert('Error reading the PDF file!');
-    console.error('FileReader error:', fileReader.error);
-    loader.style.display = 'none';
-  };
-
   fileReader.readAsArrayBuffer(file);
 });
 
-// Function to generate MCQs using the GROQ AI API
 document.getElementById('generateMCQs').addEventListener('click', async function () {
   const GROQ_API_KEY = "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";
   const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
   const mcqContainer = document.getElementById('mcqContainer');
   const mcqResult = document.getElementById('mcqResult');
+  const nextQuestionButton = document.getElementById('nextQuestion');
 
   if (!extractedText) {
     alert('No extracted text available! Please extract text first.');
     return;
   }
 
-  mcqContainer.style.display = 'none'; // Hide the container initially
-  mcqResult.textContent = 'Generating MCQs...';
+  mcqResult.textContent = 'Generating question...';
+  mcqContainer.style.display = 'block';
 
   try {
     const response = await fetch(GROQ_API_URL, {
@@ -110,7 +85,7 @@ document.getElementById('generateMCQs').addEventListener('click', async function
         "Authorization": `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-specdec", // Updated model
+        model: "llama-3.3-70b-specdec",
         stream: false,
         messages: [
           {
@@ -119,7 +94,7 @@ document.getElementById('generateMCQs').addEventListener('click', async function
           },
           {
             role: "user",
-            content: `Generate multiple-choice questions based on the following text:\n\n${extractedText}`
+            content: `Generate a set of multiple-choice questions based on the following text:\n\n${extractedText}`
           }
         ],
         max_tokens: 1000,
@@ -134,15 +109,29 @@ document.getElementById('generateMCQs').addEventListener('click', async function
     const result = await response.json();
     const mcqs = result.choices[0].message.content;
 
-    // Display the MCQs in the container
-    mcqContainer.style.display = 'block';
-    mcqResult.textContent = mcqs;
-    alert('MCQs generated successfully!');
+    // Parse the MCQs into an array
+    allQuestions = mcqs.split('\n\n').map((question) => question.trim());
+    questionIndex = 0;
 
-    console.log('Generated MCQs:', mcqs);
+    // Display the first question
+    displayQuestion(mcqResult, nextQuestionButton);
 
   } catch (error) {
-    mcqResult.textContent = 'Error generating MCQs!';
-    console.error('GROQ AI API error:', error);
+    mcqResult.textContent = 'Error generating questions!';
+    console.error('Error:', error);
   }
 });
+
+function displayQuestion(mcqResult, nextQuestionButton) {
+  if (questionIndex < allQuestions.length) {
+    mcqResult.textContent = allQuestions[questionIndex];
+    nextQuestionButton.style.display = 'block';
+    nextQuestionButton.onclick = () => {
+      questionIndex++;
+      displayQuestion(mcqResult, nextQuestionButton);
+    };
+  } else {
+    mcqResult.textContent = 'No more questions available!';
+    nextQuestionButton.style.display = 'none';
+  }
+}
