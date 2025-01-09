@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Enhanced OCR - Extract Text from Image</title>
+  <title>Enhanced OCR with Logs</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -40,7 +40,7 @@
   </style>
 </head>
 <body>
-  <h1>Enhanced OCR - Extract Text from Image</h1>
+  <h1>Enhanced OCR with Logs</h1>
   <input type="file" id="imageInput" accept="image/*">
   <canvas id="previewCanvas" style="display: none;"></canvas>
   <img id="preview" src="" alt="Original Image Preview">
@@ -64,6 +64,11 @@
     let originalImageBase64 = "";
     let enhancedImageBase64 = "";
 
+    // Utility: Display log messages
+    function logMessage(message, isError = false) {
+      alert(isError ? `Error: ${message}` : `Success: ${message}`);
+    }
+
     // Enable Enhance Button after image upload
     imageInput.addEventListener("change", function () {
       const file = this.files[0];
@@ -76,6 +81,7 @@
           enhanceButton.disabled = false; // Enable Enhance Button
           extractButton.disabled = true; // Disable Extract Button
           originalImageBase64 = e.target.result.split(",")[1]; // Save Base64 of original image
+          logMessage("Image uploaded successfully!");
         };
         reader.readAsDataURL(file);
       }
@@ -83,59 +89,61 @@
 
     // Process Image with OpenCV.js
     async function processImage(imgElement) {
-      return new Promise((resolve) => {
-        cv['onRuntimeInitialized'] = () => {
-          const src = cv.imread(imgElement);
-          const dst = new cv.Mat();
+      return new Promise((resolve, reject) => {
+        try {
+          cv['onRuntimeInitialized'] = () => {
+            const src = cv.imread(imgElement);
+            const dst = new cv.Mat();
 
-          // Convert to grayscale
-          cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+            // Convert to grayscale
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
 
-          // Enhance the image by increasing contrast and applying sharpening filter
-          cv.equalizeHist(dst, dst);
+            // Enhance the image by increasing contrast and applying sharpening filter
+            cv.equalizeHist(dst, dst);
 
-          // Optionally: Apply Gaussian blur to reduce noise (uncomment if needed)
-          // cv.GaussianBlur(dst, dst, new cv.Size(3, 3), 0);
+            // Show processed image in canvas
+            cv.imshow(previewCanvas, dst);
 
-          cv.imshow(previewCanvas, dst);
+            // Convert processed image to Base64
+            previewCanvas.toBlob((blob) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                resolve(reader.result.split(",")[1]); // Extract Base64
+              };
+              reader.readAsDataURL(blob);
+            });
 
-          // Convert processed image to Base64
-          previewCanvas.toBlob((blob) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              resolve(reader.result.split(",")[1]); // Extract Base64
-            };
-            reader.readAsDataURL(blob);
-          });
-
-          src.delete();
-          dst.delete();
-        };
+            src.delete();
+            dst.delete();
+          };
+        } catch (error) {
+          reject(error);
+        }
       });
     }
 
     // Enhance Image Quality Button
     enhanceButton.addEventListener("click", async function () {
       if (!originalImageBase64) {
-        alert("Please upload an image first!");
+        logMessage("Please upload an image first!", true);
         return;
       }
 
-      // Wait for OpenCV to initialize
-      await new Promise((resolve) => {
-        if (cv['onRuntimeInitialized']) resolve();
-      });
-
-      // Enhance Image
-      enhancedImageBase64 = await processImage(preview);
-      processed.src = "data:image/png;base64," + enhancedImageBase64; // Show processed image
-      extractButton.disabled = false; // Enable Extract Button
+      try {
+        logMessage("Enhancing image quality...");
+        enhancedImageBase64 = await processImage(preview);
+        processed.src = "data:image/png;base64," + enhancedImageBase64; // Show processed image
+        logMessage("Image quality enhanced successfully!");
+        extractButton.disabled = false; // Enable Extract Button
+      } catch (error) {
+        logMessage("Failed to enhance image quality. " + error.message, true);
+      }
     });
 
     // Extract Text from Enhanced Image
     extractButton.addEventListener("click", async function () {
       if (!enhancedImageBase64) {
-        alert("Please enhance the image quality first!");
+        logMessage("Please enhance the image quality first!", true);
         return;
       }
 
@@ -159,6 +167,7 @@
       };
 
       try {
+        logMessage("Extracting text from image...");
         const response = await fetch(url, {
           method: "POST",
           headers: {
@@ -175,11 +184,13 @@
           result.responses[0].fullTextAnnotation
         ) {
           output.value = result.responses[0].fullTextAnnotation.text;
+          logMessage("Text extraction successful!");
         } else {
           output.value = "No text detected in the image.";
+          logMessage("No text detected in the image.", true);
         }
       } catch (error) {
-        console.error("Error:", error);
+        logMessage("Error occurred while extracting text. " + error.message, true);
         output.value = "Error occurred while extracting text.";
       }
     });
