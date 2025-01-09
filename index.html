@@ -27,7 +27,7 @@
     }
     button {
       padding: 10px 20px;
-      margin-top: 20px;
+      margin-top: 10px;
       background-color: #007BFF;
       color: white;
       border: none;
@@ -40,13 +40,14 @@
   </style>
 </head>
 <body>
-  <h1>Enhanced OCR - Extract Text from Long Screenshot</h1>
+  <h1>Enhanced OCR - Extract Text from Image</h1>
   <input type="file" id="imageInput" accept="image/*">
   <canvas id="previewCanvas" style="display: none;"></canvas>
   <img id="preview" src="" alt="Original Image Preview">
   <img id="processed" src="" alt="Processed Image Preview">
+  <button id="enhanceButton" disabled>Enhance Image Quality</button>
+  <button id="extractButton" disabled>Extract Text</button>
   <textarea id="output" placeholder="Extracted text will appear here..."></textarea>
-  <button id="extractButton">Extract Text</button>
 
   <!-- Include OpenCV.js -->
   <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
@@ -56,10 +57,29 @@
     const preview = document.getElementById("preview");
     const processed = document.getElementById("processed");
     const previewCanvas = document.getElementById("previewCanvas");
-    const output = document.getElementById("output");
+    const enhanceButton = document.getElementById("enhanceButton");
     const extractButton = document.getElementById("extractButton");
+    const output = document.getElementById("output");
 
-    let imageBase64 = "";
+    let originalImageBase64 = "";
+    let enhancedImageBase64 = "";
+
+    // Enable Enhance Button after image upload
+    imageInput.addEventListener("change", function () {
+      const file = this.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          preview.src = e.target.result; // Show original image
+          processed.src = ""; // Clear processed preview
+          enhancedImageBase64 = ""; // Clear previous enhanced image
+          enhanceButton.disabled = false; // Enable Enhance Button
+          extractButton.disabled = true; // Disable Extract Button
+          originalImageBase64 = e.target.result.split(",")[1]; // Save Base64 of original image
+        };
+        reader.readAsDataURL(file);
+      }
+    });
 
     // Process Image with OpenCV.js
     async function processImage(imgElement) {
@@ -74,7 +94,7 @@
           // Enhance the image by increasing contrast and applying sharpening filter
           cv.equalizeHist(dst, dst);
 
-          // Optionally: Apply Gaussian blur to reduce noise (comment out if unnecessary)
+          // Optionally: Apply Gaussian blur to reduce noise (uncomment if needed)
           // cv.GaussianBlur(dst, dst, new cv.Size(3, 3), 0);
 
           cv.imshow(previewCanvas, dst);
@@ -94,32 +114,28 @@
       });
     }
 
-    // Preview image on selection
-    imageInput.addEventListener("change", async function () {
-      const file = this.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async function (e) {
-          preview.src = e.target.result; // Show original image
-          processed.src = ""; // Clear processed preview
-
-          // Wait for OpenCV to initialize
-          await new Promise((resolve) => {
-            if (cv['onRuntimeInitialized']) resolve();
-          });
-
-          const processedBase64 = await processImage(preview);
-          processed.src = "data:image/png;base64," + processedBase64; // Show processed image
-          imageBase64 = processedBase64; // Use processed image for OCR
-        };
-        reader.readAsDataURL(file);
+    // Enhance Image Quality Button
+    enhanceButton.addEventListener("click", async function () {
+      if (!originalImageBase64) {
+        alert("Please upload an image first!");
+        return;
       }
+
+      // Wait for OpenCV to initialize
+      await new Promise((resolve) => {
+        if (cv['onRuntimeInitialized']) resolve();
+      });
+
+      // Enhance Image
+      enhancedImageBase64 = await processImage(preview);
+      processed.src = "data:image/png;base64," + enhancedImageBase64; // Show processed image
+      extractButton.disabled = false; // Enable Extract Button
     });
 
-    // Extract text from the processed image
+    // Extract Text from Enhanced Image
     extractButton.addEventListener("click", async function () {
-      if (!imageBase64) {
-        alert("Please upload an image and wait for processing to complete!");
+      if (!enhancedImageBase64) {
+        alert("Please enhance the image quality first!");
         return;
       }
 
@@ -130,7 +146,7 @@
         requests: [
           {
             image: {
-              content: imageBase64,
+              content: enhancedImageBase64,
             },
             features: [
               {
