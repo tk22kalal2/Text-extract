@@ -3,29 +3,121 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF to Text & MCQ Generator</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>OCR - Extract Text from Image</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #preview {
+      margin: 20px auto;
+      max-width: 100%;
+      max-height: 300px;
+      border: 1px solid #ddd;
+    }
+    textarea {
+      width: 90%;
+      height: 200px;
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 20px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>PDF to Text & MCQ Generator</h1>
-    <p>Upload a PDF (image-based or text-based) to extract text and generate MCQs.</p>
-    <input type="file" id="pdfUpload" accept="application/pdf">
-    <button id="extractText">Extract Text</button>
-    <div id="loader" style="display: none;">Processing...</div>
-    <div id="output">
-      <h2>Extracted Text:</h2>
-      <p id="textResult"></p>
-    </div>
-    <button id="generateMCQs" style="display: none;">Generate Question</button>
-    <div id="mcqContainer" style="display: none;">
-      <h2>Generated Question:</h2>
-      <div id="mcqResult"></div>
-      <button id="nextQuestion" style="display: none;">Next Question</button>
-    </div>
-  </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/tesseract.min.js"></script>
-  <script src="script.js"></script>
+  <h1>Extract Text from Long Screenshot</h1>
+  <input type="file" id="imageInput" accept="image/*">
+  <img id="preview" src="" alt="Image Preview">
+  <textarea id="output" placeholder="Extracted text will appear here..."></textarea>
+  <button id="extractButton">Extract Text</button>
+
+  <script>
+    const imageInput = document.getElementById("imageInput");
+    const preview = document.getElementById("preview");
+    const output = document.getElementById("output");
+    const extractButton = document.getElementById("extractButton");
+
+    let imageBase64 = "";
+
+    // Preview image on selection
+    imageInput.addEventListener("change", function () {
+      const file = this.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          preview.src = e.target.result;
+          imageBase64 = e.target.result.split(",")[1]; // Extract Base64 string
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Extract text from the image
+    extractButton.addEventListener("click", async function () {
+      if (!imageBase64) {
+        alert("Please upload an image first!");
+        return;
+      }
+
+      const apiKey = "YOUR_GOOGLE_VISION_API_KEY"; // Replace with your API key
+      const url = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
+
+      const requestBody = {
+        requests: [
+          {
+            image: {
+              content: imageBase64,
+            },
+            features: [
+              {
+                type: "TEXT_DETECTION",
+                maxResults: 1,
+              },
+            ],
+          },
+        ],
+      };
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        const result = await response.json();
+
+        if (
+          result.responses &&
+          result.responses[0] &&
+          result.responses[0].fullTextAnnotation
+        ) {
+          output.value = result.responses[0].fullTextAnnotation.text;
+        } else {
+          output.value = "No text detected in the image.";
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        output.value = "Error occurred while extracting text.";
+      }
+    });
+  </script>
 </body>
 </html>
