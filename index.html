@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OCR - Extract Text from Image</title>
+  <title>Enhanced OCR - Extract Text from Image</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
       padding: 20px;
     }
-    #preview {
+    #preview, #processed {
       margin: 20px auto;
       max-width: 100%;
       max-height: 300px;
@@ -40,37 +40,86 @@
   </style>
 </head>
 <body>
-  <h1>Extract Text from Long Screenshot</h1>
+  <h1>Enhanced OCR - Extract Text from Long Screenshot</h1>
   <input type="file" id="imageInput" accept="image/*">
-  <img id="preview" src="" alt="Image Preview">
+  <canvas id="previewCanvas" style="display: none;"></canvas>
+  <img id="preview" src="" alt="Original Image Preview">
+  <img id="processed" src="" alt="Processed Image Preview">
   <textarea id="output" placeholder="Extracted text will appear here..."></textarea>
   <button id="extractButton">Extract Text</button>
+
+  <!-- Include OpenCV.js -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
 
   <script>
     const imageInput = document.getElementById("imageInput");
     const preview = document.getElementById("preview");
+    const processed = document.getElementById("processed");
+    const previewCanvas = document.getElementById("previewCanvas");
     const output = document.getElementById("output");
     const extractButton = document.getElementById("extractButton");
 
     let imageBase64 = "";
 
+    // Process Image with OpenCV.js
+    async function processImage(imgElement) {
+      return new Promise((resolve) => {
+        cv['onRuntimeInitialized'] = () => {
+          const src = cv.imread(imgElement);
+          const dst = new cv.Mat();
+
+          // Convert to grayscale
+          cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+
+          // Enhance the image by increasing contrast and applying sharpening filter
+          cv.equalizeHist(dst, dst);
+
+          // Optionally: Apply Gaussian blur to reduce noise (comment out if unnecessary)
+          // cv.GaussianBlur(dst, dst, new cv.Size(3, 3), 0);
+
+          cv.imshow(previewCanvas, dst);
+
+          // Convert processed image to Base64
+          previewCanvas.toBlob((blob) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              resolve(reader.result.split(",")[1]); // Extract Base64
+            };
+            reader.readAsDataURL(blob);
+          });
+
+          src.delete();
+          dst.delete();
+        };
+      });
+    }
+
     // Preview image on selection
-    imageInput.addEventListener("change", function () {
+    imageInput.addEventListener("change", async function () {
       const file = this.files[0];
       if (file) {
         const reader = new FileReader();
-        reader.onload = function (e) {
-          preview.src = e.target.result;
-          imageBase64 = e.target.result.split(",")[1]; // Extract Base64 string
+        reader.onload = async function (e) {
+          preview.src = e.target.result; // Show original image
+          processed.src = ""; // Clear processed preview
+
+          // Wait for OpenCV to initialize
+          await new Promise((resolve) => {
+            if (cv['onRuntimeInitialized']) resolve();
+          });
+
+          const processedBase64 = await processImage(preview);
+          processed.src = "data:image/png;base64," + processedBase64; // Show processed image
+          imageBase64 = processedBase64; // Use processed image for OCR
         };
         reader.readAsDataURL(file);
       }
     });
 
-    // Extract text from the image
+    // Extract text from the processed image
     extractButton.addEventListener("click", async function () {
       if (!imageBase64) {
-        alert("Please upload an image first!");
+        alert("Please upload an image and wait for processing to complete!");
         return;
       }
 
