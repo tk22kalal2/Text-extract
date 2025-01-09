@@ -71,7 +71,7 @@
     let originalImageBase64 = "";
     let enhancedImageBase64 = "";
 
-    // Utility: Display progress
+    // Utility: Update progress
     function updateProgress(message) {
       progress.textContent = message;
     }
@@ -97,46 +97,42 @@
     // Process Image with OpenCV.js
     async function processImage(imgElement) {
       return new Promise((resolve, reject) => {
-        try {
-          cv['onRuntimeInitialized'] = () => {
-            const src = cv.imread(imgElement);
-            const dst = new cv.Mat();
+        cv['onRuntimeInitialized'] = () => {
+          const src = cv.imread(imgElement);
+          const dst = new cv.Mat();
 
-            // Show progress: Converting to grayscale
+          try {
+            // Grayscale conversion
             updateProgress("10% - Converting to grayscale...");
-            setTimeout(() => {
-              cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
 
-              // Show progress: Equalizing histogram
-              updateProgress("50% - Enhancing contrast...");
-              setTimeout(() => {
-                cv.equalizeHist(dst, dst);
+            // Histogram equalization
+            updateProgress("50% - Equalizing histogram...");
+            cv.equalizeHist(dst, dst);
 
-                // Show progress: Finalizing
-                updateProgress("90% - Finalizing enhancement...");
-                setTimeout(() => {
-                  // Show processed image in canvas
-                  cv.imshow(previewCanvas, dst);
+            // Enhance contrast
+            updateProgress("90% - Enhancing contrast...");
+            const alpha = 1.5; // Contrast control
+            const beta = 20;  // Brightness control
+            dst.convertTo(dst, -1, alpha, beta);
 
-                  // Convert processed image to Base64
-                  previewCanvas.toBlob((blob) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      resolve(reader.result.split(",")[1]); // Extract Base64
-                      updateProgress("100% - Enhancement completed!");
-                    };
-                    reader.readAsDataURL(blob);
-                  });
+            // Convert processed image to Base64
+            cv.imshow(previewCanvas, dst);
+            previewCanvas.toBlob((blob) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                resolve(reader.result.split(",")[1]); // Extract Base64
+                updateProgress("100% - Enhancement completed!");
+              };
+              reader.readAsDataURL(blob);
+            });
 
-                  src.delete();
-                  dst.delete();
-                }, 1000); // Delay for final progress
-              }, 1000); // Delay for contrast enhancement
-            }, 1000); // Delay for grayscale conversion
-          };
-        } catch (error) {
-          reject(error);
-        }
+            src.delete();
+            dst.delete();
+          } catch (error) {
+            reject(error);
+          }
+        };
       });
     }
 
@@ -153,7 +149,7 @@
         processed.src = "data:image/png;base64," + enhancedImageBase64; // Show processed image
         extractButton.disabled = false; // Enable Extract Button
       } catch (error) {
-        updateProgress("Failed to enhance image quality. " + error.message);
+        updateProgress("Error during enhancement: " + error.message);
       }
     });
 
