@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Enhanced OCR with Logs</title>
+  <title>Enhanced OCR with Progress</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -37,16 +37,22 @@
     button:hover {
       background-color: #0056b3;
     }
+    #progress {
+      margin-top: 10px;
+      font-size: 18px;
+      color: #007BFF;
+    }
   </style>
 </head>
 <body>
-  <h1>Enhanced OCR with Logs</h1>
+  <h1>Enhanced OCR with Progress</h1>
   <input type="file" id="imageInput" accept="image/*">
   <canvas id="previewCanvas" style="display: none;"></canvas>
   <img id="preview" src="" alt="Original Image Preview">
   <img id="processed" src="" alt="Processed Image Preview">
   <button id="enhanceButton" disabled>Enhance Image Quality</button>
   <button id="extractButton" disabled>Extract Text</button>
+  <p id="progress"></p>
   <textarea id="output" placeholder="Extracted text will appear here..."></textarea>
 
   <!-- Include OpenCV.js -->
@@ -59,14 +65,15 @@
     const previewCanvas = document.getElementById("previewCanvas");
     const enhanceButton = document.getElementById("enhanceButton");
     const extractButton = document.getElementById("extractButton");
+    const progress = document.getElementById("progress");
     const output = document.getElementById("output");
 
     let originalImageBase64 = "";
     let enhancedImageBase64 = "";
 
-    // Utility: Display log messages
-    function logMessage(message, isError = false) {
-      alert(isError ? `Error: ${message}` : `Success: ${message}`);
+    // Utility: Display progress
+    function updateProgress(message) {
+      progress.textContent = message;
     }
 
     // Enable Enhance Button after image upload
@@ -81,7 +88,7 @@
           enhanceButton.disabled = false; // Enable Enhance Button
           extractButton.disabled = true; // Disable Extract Button
           originalImageBase64 = e.target.result.split(",")[1]; // Save Base64 of original image
-          logMessage("Image uploaded successfully!");
+          updateProgress("Image uploaded successfully!");
         };
         reader.readAsDataURL(file);
       }
@@ -95,26 +102,37 @@
             const src = cv.imread(imgElement);
             const dst = new cv.Mat();
 
-            // Convert to grayscale
-            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+            // Show progress: Converting to grayscale
+            updateProgress("10% - Converting to grayscale...");
+            setTimeout(() => {
+              cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
 
-            // Enhance the image by increasing contrast and applying sharpening filter
-            cv.equalizeHist(dst, dst);
+              // Show progress: Equalizing histogram
+              updateProgress("50% - Enhancing contrast...");
+              setTimeout(() => {
+                cv.equalizeHist(dst, dst);
 
-            // Show processed image in canvas
-            cv.imshow(previewCanvas, dst);
+                // Show progress: Finalizing
+                updateProgress("90% - Finalizing enhancement...");
+                setTimeout(() => {
+                  // Show processed image in canvas
+                  cv.imshow(previewCanvas, dst);
 
-            // Convert processed image to Base64
-            previewCanvas.toBlob((blob) => {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                resolve(reader.result.split(",")[1]); // Extract Base64
-              };
-              reader.readAsDataURL(blob);
-            });
+                  // Convert processed image to Base64
+                  previewCanvas.toBlob((blob) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      resolve(reader.result.split(",")[1]); // Extract Base64
+                      updateProgress("100% - Enhancement completed!");
+                    };
+                    reader.readAsDataURL(blob);
+                  });
 
-            src.delete();
-            dst.delete();
+                  src.delete();
+                  dst.delete();
+                }, 1000); // Delay for final progress
+              }, 1000); // Delay for contrast enhancement
+            }, 1000); // Delay for grayscale conversion
           };
         } catch (error) {
           reject(error);
@@ -125,25 +143,24 @@
     // Enhance Image Quality Button
     enhanceButton.addEventListener("click", async function () {
       if (!originalImageBase64) {
-        logMessage("Please upload an image first!", true);
+        updateProgress("Please upload an image first!");
         return;
       }
 
       try {
-        logMessage("Enhancing image quality...");
+        updateProgress("Starting image quality enhancement...");
         enhancedImageBase64 = await processImage(preview);
         processed.src = "data:image/png;base64," + enhancedImageBase64; // Show processed image
-        logMessage("Image quality enhanced successfully!");
         extractButton.disabled = false; // Enable Extract Button
       } catch (error) {
-        logMessage("Failed to enhance image quality. " + error.message, true);
+        updateProgress("Failed to enhance image quality. " + error.message);
       }
     });
 
     // Extract Text from Enhanced Image
     extractButton.addEventListener("click", async function () {
       if (!enhancedImageBase64) {
-        logMessage("Please enhance the image quality first!", true);
+        updateProgress("Please enhance the image quality first!");
         return;
       }
 
@@ -167,7 +184,7 @@
       };
 
       try {
-        logMessage("Extracting text from image...");
+        updateProgress("Extracting text from image...");
         const response = await fetch(url, {
           method: "POST",
           headers: {
@@ -184,13 +201,13 @@
           result.responses[0].fullTextAnnotation
         ) {
           output.value = result.responses[0].fullTextAnnotation.text;
-          logMessage("Text extraction successful!");
+          updateProgress("Text extraction successful!");
         } else {
           output.value = "No text detected in the image.";
-          logMessage("No text detected in the image.", true);
+          updateProgress("No text detected in the image.");
         }
       } catch (error) {
-        logMessage("Error occurred while extracting text. " + error.message, true);
+        updateProgress("Error occurred while extracting text. " + error.message);
         output.value = "Error occurred while extracting text.";
       }
     });
